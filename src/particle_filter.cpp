@@ -27,7 +27,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// Add random Gaussian noise to each particle.
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
 
-    num_particles = 64;
+    num_particles = 128;
 
     default_random_engine gen;
     normal_distribution<double> dist_x(x, std[0]);
@@ -61,8 +61,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
     normal_distribution<double> dist_y(0, std_pos[1]);
     normal_distribution<double> dist_theta(0, std_pos[2]);
 
-    if(yaw_rate == 0) {
-        yaw_rate = 1; // zero division
+    if(fabs(yaw_rate) < 0.0001) {
+        yaw_rate = 0.0001;
     }
 
     for(int i = 0; i < num_particles; i++) {
@@ -81,10 +81,10 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 }
 
 void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::vector<LandmarkObs>& observations) {
-	// TODO: Find the predicted measurement that is closest to each observed measurement and assign the 
-	//   observed measurement to this particular landmark.
-	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
-	//   implement this method and use it as a helper during the updateWeights phase.
+    // TODO: Find the predicted measurement that is closest to each observed measurement and assign the 
+    //   observed measurement to this particular landmark.
+    // NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
+    //   implement this method and use it as a helper during the updateWeights phase.
 
     for(int i = 0; i < observations.size(); i++) {
         double dist_min = DBL_MAX;
@@ -129,9 +129,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             double y_map = y_part + (sin(theta) * x_obs) + (cos(theta) * y_obs); // y_mu
 
             LandmarkObs l;
-            l.id = j;
-            l.x = x_map;
-            l.y = y_map;
+            l.id = -1;
+            l.x  = x_map;
+            l.y  = y_map;
 
             mus.push_back(l);
         }
@@ -156,17 +156,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
             total_weight = 1.0;
             for(int j = 0; j < mus.size(); j++) {
-                // calculate normalization term
                 double gauss_norm= (1.0/(2.0 * M_PI * sig_x * sig_y));
-
-                // calculate exponent
                 double x_obs = mus[j].x;
                 double y_obs = mus[j].y;
-                double mu_x = predicted[mus[j].id-1].x;
-                double mu_y = predicted[mus[j].id-1].y;
+                double mu_x = map_landmarks.landmark_list[mus[j].id-1].x_f;
+                double mu_y = map_landmarks.landmark_list[mus[j].id-1].y_f;
                 double exponent = pow(x_obs - mu_x, 2)/(2 * sig_x*sig_x) + pow(y_obs - mu_y, 2)/(2 * sig_y*sig_y);
 
-                // calculate weight using normalization terms and exponent
                 double weight = gauss_norm * exp(-exponent);
 
                 total_weight *= weight;
@@ -176,7 +172,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         }
 
         particles[i].weight = total_weight;
-        weights[i] = particles[i].weight;
+        weights[i]          = total_weight;
     }
 }
 
@@ -186,8 +182,7 @@ void ParticleFilter::resample() {
     //   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
     std::vector<Particle> new_particles;
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    default_random_engine gen;
 
     std::discrete_distribution<> d(weights.begin(), weights.end());
     for(int i = 0; i < num_particles; i++) {
